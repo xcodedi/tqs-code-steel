@@ -4,7 +4,7 @@ import re
 os.system('cls' if os.name == 'nt' else 'clear')
 
 # Caminho da pasta com os arquivos
-pasta = r"\\C:"
+pasta = r"c:\caminho\da\pasta"
 
 # Percorre todos os arquivos na pasta
 for nome_arquivo in os.listdir(pasta):

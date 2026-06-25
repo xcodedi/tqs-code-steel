@@ -24,7 +24,7 @@ def verificar_ordem_numerica(pasta):
     numeros.sort()
     print("Números encontrados:", numeros)
 
-    # Agora a sequência obrigatoriamente começa em 1
+    # Sequência obrigatoriamente começa em 1
     inicio = 1
     fim = numeros[-1]
     esperado = list(range(inicio, fim + 1))
@@ -36,5 +36,5 @@ def verificar_ordem_numerica(pasta):
     else:
         print("Todos os números estão presentes, começando em 1 e sem falhas.")
 
-# Exemplo de uso
-verificar_ordem_numerica(r"\\C:")
+# Caminho da pasta para renomear 
+verificar_ordem_numerica(r"\\Mebranco\arquivo morto\arquivo morto\projetos\2024\1124 - Padre Canova 2621\plantas\ferros-lst")

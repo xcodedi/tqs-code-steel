@@ -6,7 +6,7 @@ from openpyxl import load_workbook
 os.system('cls' if os.name == 'nt' else 'clear')
 
 # ======= CONFIGURAÇÕES =======
-PASTA = r"\\C:"
+PASTA = r"c:\caminho\da\pasta" #caminho da pasta aonde estão os lst
 BITOLAS_VALIDAS = {5, 6.3, 8, 10, 12.5, 16, 20,22,25,32,40,50}
 # =============================
 
@@ -22,45 +22,61 @@ PADRAO_NOME = re.compile(
 
 # Dicionários de tradução
 MAPA_PAVIMENTO = {
+    # infraestrutura
     "FUN": "Fundação",
     "PIL": "Pilares",
+
+    # Subsolos
+    "SUB2": "Subsolo-2",
+    "SUB1": "Subsolo-1",
+
+    # Acessos
+    "RAM": "Rampa",
+    "CAL": "Calçada",
     "TER": "Térreo",
     "TÉR": "Térreo",
     "HAL": "Hall",
-    "GAR1": "G1",
-    "ELE": "Elevado-G1",
-    "COB": "Cobertura",
-    "TEL": "Telhado",
-    "MAQ": "Casa de Máquinas",
-    "CAI": "Caixa d’Água",
-    "CIN": "Cinta",
-    "PAT": "Patamar",
-    "PAT2": "PATAMAR-SUPERIOR",
-    "ESP": "Espaço Técnico",
-    "SUB1": "Subsolo-1",
-    "SUB2": "Subsolo-2",
+
+    # Garagens
     "GAR": "Garagem-1",
+    "GAR1": "G1",
+    "G1_": "GAR1",
+
     "GAR2": "Garagem-2",
+    "G2_": "GAR2",
+
+    "ELE": "Elevado-lazer",
+
+    # Pavimentos
     "LAZ": "Lazer",
-    "RAM": "Rampa",
-    "GAR2": "G2",
+    "TIP": "TIPO",
     "TIP1": "Tipo-1",
-    "SAL": "Salão-festas",
     "TIP5": "PAV 5",
     "TIP69": "Tipo-6-9",
-    "TIP1015": "Tipo-10-15",
     "TIP7A14": "Tipo-7-14",
+    "TIP1015": "Tipo-10-15",
     "TIP15A23": "Tipo-15-23",
     "TIP1619": "Tipo-16-19",
     "TIP2025": "Tipo-20-25",
     "TIP2627": "Tipo-26-27",
+
+    # Duplex
     "DUP": "Duplex-inferior",
+    "PAT": "Patamar",
+    "PAT2": "PATAMAR-SUPERIOR",
     "DUPS": "Duplex-superior",
-    "G1_": "GAR1",
-    "G2_": "GAR2",
-    "TIP": "TIPO",
+
+    # Áreas superiores
+    "SAL": "Salão-festas",
+    "ESP": "Espaço Técnico",
+    "COB": "Cobertura",
+    "TEL": "Telhado",
+
+    # Técnicos
+    "MAQ": "Casa de Máquinas",
     "MOT": "MOTOR",
-    "CAL": "Calçada"
+    "CAI": "Caixa",
+    "CIN": "Cinta",
 }
 
 MAPA_ELEMENTO = {
@@ -73,10 +89,12 @@ MAPA_ELEMENTO = {
     "FUN": "Blocos"
 }
 
+#Converte texto numérico para float, aceita vírgula e ponto
 def parse_num(s: str) -> float | None:
-    """Converte texto numérico para float, aceita vírgula e ponto."""
+    
     t = s.strip()
     if "," in t and "." in t:
+        # Formato tipo 1.685,00 -> 1685.00
         t = t.replace(".", "").replace(",", ".")
     else:
         t = t.replace(",", ".")
@@ -85,27 +103,36 @@ def parse_num(s: str) -> float | None:
     except ValueError:
         return None
 
-
+#Processa um arquivo .LST e retorna a soma dos pesos por bitola
 def processar_lst(caminho_arquivo: str):
-    """Processa um arquivo .LST e retorna a soma dos pesos por bitola."""
+
     for enc in ("cp1252", "latin-1", "utf-8"):
         try:
-            linhas = open(caminho_arquivo, "r", encoding=enc, errors="ignore").read().splitlines()
+            linhas = open(
+                caminho_arquivo,
+                "r",
+                encoding=enc,
+                errors="ignore"
+            ).read().splitlines()
             break
         except Exception:
             linhas = None
 
     soma_bitola = defaultdict(float)
+    soma_aco = defaultdict(float)
 
     for linha in linhas:
+
         if "peso total" in linha.lower():
             continue
 
         m = LINHA_RESUMO.match(linha)
+
         if not m:
             continue
 
-        _, bit_s, _, peso_s = m.groups()
+        aco, bit_s, _, peso_s = m.groups()
+
         bit = parse_num(bit_s)
         peso = parse_num(peso_s)
 
@@ -113,11 +140,12 @@ def processar_lst(caminho_arquivo: str):
             continue
 
         soma_bitola[bit] += peso
+        soma_aco[aco] += peso
 
-    return soma_bitola
+    return soma_bitola, soma_aco
 
 
-# ====== VARREDURA ======
+# VARREDURA 
 arquivos = [f for f in os.listdir(PASTA) if f.lower().endswith(".lst")]
 if not arquivos:
     print("Nenhum arquivo .LST encontrado na pasta. Verifique PASTA.")
@@ -125,10 +153,11 @@ if not arquivos:
 
 # Estrutura: {pavimento: {elemento: {bitola: peso}}}
 dados = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
-
+total_geral_bitola = defaultdict(float)
+total_geral_aco = defaultdict(float)
 for nome in arquivos:
     caminho = os.path.join(PASTA, nome)
-    soma_folha_bitola = processar_lst(caminho)
+    soma_folha_bitola, soma_folha_aco = processar_lst(caminho)
 
     m = PADRAO_NOME.search(nome)
     if not m:
@@ -137,22 +166,29 @@ for nome in arquivos:
 
     pav_raw, elem_raw = m.groups()
 
-    # Verifica se o código existe no mapa
     pavimento = MAPA_PAVIMENTO.get(pav_raw.upper())
     elemento = MAPA_ELEMENTO.get(elem_raw.upper())
 
     if not pavimento:
         print(f" Pavimento '{pav_raw}' não mapeado (arquivo: {nome})")
         pavimento = pav_raw
+
     if not elemento:
         print(f" Elemento '{elem_raw}' não mapeado (arquivo: {nome})")
         elemento = elem_raw
 
+    # TEM QUE FICAR DENTRO DO LOOP
+
     for bit, peso in soma_folha_bitola.items():
         dados[pavimento][elemento][bit] += peso
 
+    for bit, peso in soma_folha_bitola.items():
+        total_geral_bitola[bit] += peso
 
-# ====== EXIBE RESULTADOS ======
+    for aco, peso in soma_folha_aco.items():
+        total_geral_aco[aco] += peso
+
+# EXIBE RESULTADOS
 print("\n TOTAL DE AÇO POR PAVIMENTO, ELEMENTO E BITOLA:\n")
 
 total_geral = 0
@@ -170,51 +206,77 @@ for pav, elementos in dados.items():
     total_geral += total_pav
     print(f"  Total do pavimento {pav}: {total_pav:.2f} kgf\n")
 
+print("\n" + "=" * 80)
 print(f"\n TOTAL GERAL DE AÇO: {total_geral:.2f} kgf\n")
+print("=" * 80)
+print("\nTOTAL GERAL POR BITOLA:")
+
+for bit in sorted(total_geral_bitola):
+    print(
+        f"  Bitola {bit:g} mm: "
+        f"{total_geral_bitola[bit]:.2f} kgf"
+    )
+
+print("\nTOTAL POR AÇO:")
+
+for aco in ("50A", "60A"):
+    if aco in total_geral_aco:
+        print(
+            f"  {aco}: "
+            f"{total_geral_aco[aco]:.2f} kgf"
+        )
+
 
 from openpyxl import Workbook
 
-# ====== EXPORTA PARA EXCEL ======
+# EXPORTA PARA EXCEL
 from openpyxl import load_workbook
 
-# =====================================================
-# LINHAS DOS PAVIMENTOS
-# =====================================================
+# LINHAS DOS PAVIMENTOS DENTRO DO EXCEL
 
 LINHAS_PAVIMENTOS = {
-    "Cinta": 7,
-    "MOTOR": 8,
-    "Cobertura": 9,
-    "Duplex-superior": 10,
-    "Patamar-Superior": 11,
-    "Duplex-inferior": 12,
-    "Tipo-26-27": 13,
-    "Tipo-20-25": 14,
-    "Tipo-16-19": 15,
-    "Tipo-10-15": 16,
-    "Tipo-6-9": 17,
-    "PAV 5": 18,
-    "Lazer": 19,
-    "Patamar": 20,
-    "Térreo": 21,
-    "Calçada": 22,
-    "Subsolo-1": 23,
-    "Rampa": 24,
-    "Subsolo-2": 25,
+    # Estrutura base (BLOCOS E PILARES,ENTRETANTO SE HOUVER FERRO NO NIVEL FUNDAÇÃO PODE MUDAR)
+    "Fundação": 27,    
     "Pilares": 26,
-    "Fundação": 27,
-    "GAR1": 40,
-    "GAR2": 41,
-    "Tipo-1": 42,
-    "TIPO": 43,
-    "Salão-festas": 44,
-    "Telhado": 45,
-    "Caixa d’Água": 46
+
+    # Subsolos
+    "Subsolo-2": 25,
+    "Subsolo-1": 24,
+
+    # Acesso
+    "Patamar":40,
+    "Rampa": 23,
+    "Calçada": 22,
+    "Térreo": 21,
+
+    # Garagens
+    "GAR1": 20,
+    "GAR2": 19,
+
+    # Pavimentos
+    "Lazer": 18,
+    "Tipo-1": 17,
+    "PAV 5": 16,
+    "Tipo-6-9": 34,
+    "Tipo-10-15": 35,
+    "Tipo-16-19": 36,
+    "Tipo-20-25": 37,
+    "Tipo-26-27": 38,
+    "TIPO": 15,
+
+    # Coberturas especiais
+    "Duplex-inferior": 14,
+    "Patamar-Superior": 13,
+    "Duplex-superior": 12,
+    "Cobertura": 11,
+    "Salão-festas": 39,
+    "Telhado": 10,
+    "MOTOR": 9,
+    "Caixa": 8,
+    "Cinta": 7,
 }
 
-# =====================================================
 # COLUNAS DA PLANILHA
-# =====================================================
 
 COLUNAS = {
 
@@ -271,17 +333,24 @@ COLUNAS = {
     }
 }
 
-# =====================================================
-# PLANILHA MODELO
-# =====================================================
-MODELO = r"\\C:"
+
+# PLANILHA MODELO (O engenheiro deve ter uma planilha base do excel e ajustar as linhas e colunas dos elementos e pavimentos de acordo)
+
+MODELO = r"c:\caminho\da\pasta\planilha-ferros.xlsx" #caminho da pasta aonde está a planilha modelo .xlsx
 
 wb = load_workbook(MODELO)
 ws = wb.active
 
-# =====================================================
+# COLOCAR NOME DO PAV DO LADO
+
+for pavimento in dados.keys():
+
+    linha = LINHAS_PAVIMENTOS.get(pavimento)
+
+    if linha is not None:
+        ws[f"B{linha}"] = pavimento
+
 # PREENCHE A PLANILHA
-# =====================================================
 
 for pav, elementos in dados.items():
 
@@ -317,17 +386,23 @@ for pav, elementos in dados.items():
             if valor_atual is None:
                 valor_atual = 0
 
-            ws[celula] = round(float(valor_atual) + peso, 2)
+            try:
+                ws[celula] = round(float(valor_atual) + peso, 2)
 
-# =====================================================
+            except Exception as e:
+                print(
+                    f"Erro na célula {celula} | "
+                    f"valor_atual={valor_atual!r} | "
+                    f"tipo={type(valor_atual)} | "
+                    f"peso={peso}"
+                )
+                raise
+
 # TOTAL GERAL
-# =====================================================
 ws["Z1"] = round(total_geral, 2)
 
-# =====================================================
 # SALVA
-# =====================================================
-saida = r"\\C:"
+saida = r"c:\caminho\da\pasta\resumos.xlsx" #caminho da pasta que será salvada
 
 wb.save(saida)
 
