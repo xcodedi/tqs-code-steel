@@ -37,4 +37,4 @@ def verificar_ordem_numerica(pasta):
         print("Todos os números estão presentes, começando em 1 e sem falhas.")
 
 # Caminho da pasta para renomear 
-verificar_ordem_numerica(r"\\Mebranco\arquivo morto\arquivo morto\projetos\2024\1124 - Padre Canova 2621\plantas\ferros-lst")
+verificar_ordem_numerica(r"\\caminho\da\pasta\")
